@@ -51,14 +51,14 @@ def parse_date(text: str) -> str:
     try:
         return datetime.strptime(text.strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
     except ValueError:
-        raise AppError("날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).", "예: 2024-01-15") from None
+        raise AppError("날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).", "예: 2026-11-15") from None
 
 
 def parse_month(text: str) -> str:
     try:
         return datetime.strptime(text.strip(), "%Y-%m").strftime("%Y-%m")
     except ValueError:
-        raise AppError("월 형식이 올바르지 않습니다 (YYYY-MM).", "예: 2024-01") from None
+        raise AppError("월 형식이 올바르지 않습니다 (YYYY-MM).", "예: 2026-11") from None
 
 
 def parse_type(text: str) -> str:

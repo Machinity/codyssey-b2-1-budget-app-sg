@@ -29,11 +29,11 @@ python -m budget_app <command> --help  # 명령별 도움말
 
 | 상황 | 예시 명령 | `[오류]` 출력 | `[힌트]` 출력 | 종료 코드 |
 | --- | --- | --- | --- | --- |
-| 날짜 형식 오류 | `search --from 2024/01/01` | 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD). | 예: 2024-01-15 | 1 |
-| 월 형식 오류 | `summary --month 2024/01` | 월 형식이 올바르지 않습니다 (YYYY-MM). | 예: 2024-01 | 1 |
+| 날짜 형식 오류 | `search --from 2026/11/01` | 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD). | 예: 2026-11-15 | 1 |
+| 월 형식 오류 | `summary --month 2026/11` | 월 형식이 올바르지 않습니다 (YYYY-MM). | 예: 2026-11 | 1 |
 | 허용되지 않은 타입 | `update --id TX-000001 --type exp` | 허용되지 않은 타입입니다: 'exp' | income 또는 expense 중 하나를 입력하세요. | 1 |
-| 금액이 숫자가 아님 | `budget set --month 2024-01 --amount abc` | 금액은 정수여야 합니다: 'abc' | 예: 15000 | 1 |
-| 금액이 0 이하 | `budget set --month 2024-01 --amount -5` | 금액은 0보다 커야 합니다. | 양수 정수를 입력하세요. 예: 15000 | 1 |
+| 금액이 숫자가 아님 | `budget set --month 2026-11 --amount abc` | 금액은 정수여야 합니다: 'abc' | 예: 15000 | 1 |
+| 금액이 0 이하 | `budget set --month 2026-11 --amount -5` | 금액은 0보다 커야 합니다. | 양수 정수를 입력하세요. 예: 15000 | 1 |
 | 없는 카테고리 | `update --id TX-000001 --category nope` | 존재하지 않는 카테고리입니다: 'nope' | 등록된 카테고리: … (새로 등록: python -m budget_app category add --name nope) | 1 |
 | 이미 있는 카테고리 추가 | `category add --name food` | 이미 존재하는 카테고리입니다: food | category list 로 목록을 확인하세요. | 1 |
 | 사용 중인 카테고리 삭제 | `category remove --name food` | 사용 중인 카테고리는 삭제할 수 없습니다: food | 대체 카테고리로 옮긴 뒤 삭제: category remove --name food --replace-with <카테고리> … | 1 |
@@ -42,8 +42,8 @@ python -m budget_app <command> --help  # 명령별 도움말
 | export 기간 조건 없음 | `export --out a.csv` | 내보낼 기간 조건이 없습니다. | --month YYYY-MM 또는 --from/--to YYYY-MM-DD 를 지정하세요. | 1 |
 | import 파일 없음 | `import --from none.csv` | 파일을 찾을 수 없습니다: none.csv | 경로를 확인하세요. | 1 |
 | import CSV 헤더 누락 | `import --from bad.csv` | CSV 필수 컬럼이 없습니다: amount, category, date, type | 헤더 예: date,type,category,amount,memo,tags | 1 |
-| export 경로 폴더 없음 | `export --out nodir/x.csv --month 2024-01` | 파일 처리 실패: No such file or directory (nodir/x.csv) | 경로와 권한을 확인하세요. | 1 |
-| 쓰기 권한 없음 | `export --out ro/x.csv --month 2024-01` | 파일 처리 실패: Permission denied (ro/x.csv) | 경로와 권한을 확인하세요. | 1 |
+| export 경로 폴더 없음 | `export --out nodir/x.csv --month 2026-11` | 파일 처리 실패: No such file or directory (nodir/x.csv) | 경로와 권한을 확인하세요. | 1 |
+| 쓰기 권한 없음 | `export --out ro/x.csv --month 2026-11` | 파일 처리 실패: Permission denied (ro/x.csv) | 경로와 권한을 확인하세요. | 1 |
 | 데이터 파일 손상 | (transactions.jsonl 에 깨진 줄) `list` | data/transactions.jsonl 1번째 줄이 손상되었습니다. | 해당 줄을 수정하거나 삭제한 뒤 다시 실행하세요. | 1 |
 | 다른 실행이 쓰기 중 | 두 터미널에서 동시에 `import` | 다른 budget_app 실행이 데이터를 수정 중입니다 (잠금 대기 시간 초과). | 잠시 후 다시 실행하세요. 실행 중인 budget_app 이 없다면 data/.lock 를 삭제하세요. | 1 |
 | `--atomic` import 에 잘못된 행 | `import --from mixed.csv --atomic` | 잘못된 행 2개가 있어 아무것도 가져오지 않았습니다 (--atomic). (아래에 행 번호·사유 목록) | 해당 행을 고친 뒤 다시 실행하거나, 잘못된 행만 건너뛰려면 --atomic 없이 실행하세요. | 1 |
@@ -63,13 +63,13 @@ python -m budget_app <command> --help  # 명령별 도움말
 $ bash scripts/check_exit_codes.sh
 PASS  exit=0   (expected 0  )  $ python -m budget_app add   # add (정상)
 PASS  exit=0   (expected 0  )  $ python -m budget_app list --limit 5   # list (정상)
-PASS  exit=0   (expected 0  )  $ python -m budget_app budget set --month 2024-01 --amount 500000   # budget set (정상)
-PASS  exit=0   (expected 0  )  $ python -m budget_app summary --month 2024-01   # summary (정상)
-PASS  exit=0   (expected 0  )  $ python -m budget_app export --out out.csv --month 2024-01   # export (정상)
+PASS  exit=0   (expected 0  )  $ python -m budget_app budget set --month 2026-11 --amount 500000   # budget set (정상)
+PASS  exit=0   (expected 0  )  $ python -m budget_app summary --month 2026-11   # summary (정상)
+PASS  exit=0   (expected 0  )  $ python -m budget_app export --out out.csv --month 2026-11   # export (정상)
 PASS  exit=1   (expected 1  )  $ python -m budget_app delete --id TX-999999   # delete 없는 id
 PASS  exit=1   (expected 1  )  $ python -m budget_app export --out x.csv   # export 기간 조건 없음
 PASS  exit=1   (expected 1  )  $ python -m budget_app import --from none.csv   # import 파일 없음
-PASS  exit=1   (expected 1  )  $ python -m budget_app summary --month 2024/01   # summary 월 형식 오류
+PASS  exit=1   (expected 1  )  $ python -m budget_app summary --month 2026/11   # summary 월 형식 오류
 PASS  exit=1   (expected 1  )  $ python -m budget_app category remove --name food   # category 사용 중 삭제
 PASS  exit=2   (expected 2  )  $ python -m budget_app summary   # summary --month 누락
 PASS  exit=2   (expected 2  )  $ python -m budget_app list --limit abc   # list --limit 형식 오류
@@ -95,9 +95,9 @@ GitHub Actions([.github/workflows/ci.yml](.github/workflows/ci.yml))가 push/PR 
 
 | 파일 | 한 줄 예시 |
 | --- | --- |
-| `data/transactions.jsonl` | `{"id": "TX-000001", "date": "2024-01-15", "type": "expense", "category": "food", "amount": 15000, "memo": "점심", "tags": ["meal"]}` |
+| `data/transactions.jsonl` | `{"id": "TX-000001", "date": "2026-11-15", "type": "expense", "category": "food", "amount": 15000, "memo": "점심", "tags": ["meal"]}` |
 | `data/categories.jsonl` | `{"name": "food"}` |
-| `data/budgets.jsonl` | `{"month": "2024-01", "amount": 500000}` |
+| `data/budgets.jsonl` | `{"month": "2026-11", "amount": 500000}` |
 
 - 카테고리 파일이 비어 있으면 기본 카테고리(`food, transport, rent, salary, etc`)를 자동 생성합니다. (안 A)
 - update/delete/카테고리 삭제/예산 설정은 임시 파일에 전체를 다시 쓴 뒤 `os.replace`로 원자적 교체합니다.
@@ -116,8 +116,8 @@ GitHub Actions([.github/workflows/ci.yml](.github/workflows/ci.yml))가 push/PR 
 | 한 줄씩 스트리밍 / append | 가능 (줄 단위) | 가능 (행 단위) | 동일 — 둘 다 제너레이터 처리 가능 |
 | 손상 감지 | 깨진 줄은 `json.loads` 가 실패 → "N번째 줄 손상" 으로 정확히 보고 | 열 수만 맞으면 잘못된 값도 그대로 읽힘 | 오류 메시지에 줄 번호 제공 |
 | 한글·특수문자 | `ensure_ascii=False` 로 UTF-8 그대로, 쉼표·따옴표도 자동 이스케이프 | 메모에 쉼표·따옴표·줄바꿈이 있으면 인용 규칙에 의존 | 메모 자유 입력에 안전 |
-| 파일 크기 (10만 건 실측) | **12.9 MiB** (줄마다 키 이름 반복) | **4.2 MiB** (id 열 제외 export 기준) | CSV 가 약 1/3 — JSONL 의 단점 |
-| 읽기+객체 생성 속도 (10만 건 실측) | 0.366초 | 0.320초 | CSV 가 약 13% 빠름 — 체감 차이는 작음 |
+| 파일 크기 (10만 건 실측) | **12.8 MiB** (줄마다 키 이름 반복) | **4.2 MiB** (id 열 제외 export 기준) | CSV 가 약 1/3 — JSONL 의 단점 |
+| 읽기+객체 생성 속도 (10만 건 실측) | 0.372초 | 0.320초 | CSV 가 약 14% 빠름 — 체감 차이는 작음 |
 | 사람이 보기 / 엑셀 | 텍스트 편집기로는 읽기 쉬움, 엑셀로 바로 열기 어려움 | 엑셀·스프레드시트에서 바로 열림 | 그래서 **import/export 는 CSV** 로 제공 |
 
 결론: 거래 데이터에는 배열(`tags`)과 선택 필드가 있어 **타입과 구조를 그대로 보존하는 JSONL** 이 저장 코드를 단순하고 안전하게 만듭니다.
@@ -128,8 +128,8 @@ CSV 의 장점(엑셀 호환)은 import/export 로 따로 제공합니다.
 같은 거래 1건의 저장 형태:
 
 ```text
-JSONL: {"id": "TX-000001", "date": "2020-01-24", "type": "expense", "category": "transport", "amount": 19289, "memo": "", "tags": ["meal"]}
-CSV  : 2020-01-24,expense,transport,19289,,meal
+JSONL: {"id": "TX-000001", "date": "2025-08-02", "type": "expense", "category": "rent", "amount": 33098, "memo": "저녁", "tags": ["cafe"]}
+CSV  : 2025-08-02,expense,rent,33098,저녁,cafe
 ```
 
 ### 동시 실행과 잠금
@@ -167,7 +167,7 @@ CSV  : 2020-01-24,expense,transport,19289,,meal
 ```bash
 # 거래 추가 (대화형)
 python -m budget_app add
-# 날짜(YYYY-MM-DD): 2024-01-15
+# 날짜(YYYY-MM-DD): 2026-11-15
 # 타입(income/expense): expense
 # 카테고리: food
 # 금액(양수): 15000
@@ -179,12 +179,12 @@ python -m budget_app add
 python -m budget_app list --limit 3
 
 # 검색 (조건은 모두 선택, AND 결합, 최신순)
-python -m budget_app search --from 2024-01-01 --to 2024-01-31 --category food --type expense --q 점심 --tag meal
+python -m budget_app search --from 2026-11-01 --to 2026-11-31 --category food --type expense --q 점심 --tag meal
 
 # 월별 요약 + 예산
-python -m budget_app budget set --month 2024-01 --amount 500000
-python -m budget_app budget show --month 2024-01
-python -m budget_app summary --month 2024-01 --top 3
+python -m budget_app budget set --month 2026-11 --amount 500000
+python -m budget_app budget show --month 2026-11
+python -m budget_app summary --month 2026-11 --top 3
 
 # 카테고리 (--name 생략 시 대화형 입력)
 python -m budget_app category add --name hobby
@@ -201,8 +201,8 @@ python -m budget_app delete --id TX-000001
 # 가져오기 / 내보내기
 python -m budget_app import --from import.csv            # 부분 적용: 잘못된 행만 건너뜀
 python -m budget_app import --from import.csv --atomic   # 전부 아니면 전무: 잘못된 행이 있으면 아무것도 안 가져옴
-python -m budget_app export --out export.csv --month 2024-01
-python -m budget_app export --out export.csv --from 2024-01-01 --to 2024-03-31
+python -m budget_app export --out export.csv --month 2026-11
+python -m budget_app export --out export.csv --from 2026-11-01 --to 2026-11-30
 ```
 
 - **예산 알림 단계** (`summary` 에 예산이 설정된 달만, 사용률 = 총 지출 ÷ 예산 × 100):
@@ -290,10 +290,10 @@ OK
 ```text
 $ python -m budget_app add
 (등록된 카테고리: food, transport, rent, salary, etc)
-날짜(YYYY-MM-DD): 2024-13-40
+날짜(YYYY-MM-DD): 2026-13-40
 [오류] 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).
-[힌트] 예: 2024-01-15
-날짜(YYYY-MM-DD): 2024-01-15
+[힌트] 예: 2026-11-15
+날짜(YYYY-MM-DD): 2026-11-15
 타입(income/expense): expense
 카테고리: food
 금액(양수): 15000
@@ -309,11 +309,11 @@ $ echo $?
 ```text
 $ cat import.csv
 date,type,category,amount,memo,tags
-2024-01-14,income,salary,3000000,월급,
-2024-01-12,expense,transport,20000,버스,
-2024-01-01,expense,rent,150000,월세,"fixed,home"
-2024-01-20,expense,food,30000,저녁,"meal,dinner"
-2024-01-21,expense,nope,1000,,
+2026-11-14,income,salary,3000000,월급,
+2026-11-12,expense,transport,20000,버스,
+2026-11-01,expense,rent,150000,월세,"fixed,home"
+2026-11-20,expense,food,30000,저녁,"meal,dinner"
+2026-11-21,expense,nope,1000,,
 
 $ python -m budget_app import --from import.csv
 [건너뜀] 6행: 존재하지 않는 카테고리입니다: 'nope'
@@ -327,9 +327,9 @@ $ echo $?
 
 ```text
 $ python -m budget_app list --limit 3
-TX-000005 | 2024-01-20 | expense | food | 30000 | 저녁 | meal,dinner
-TX-000001 | 2024-01-15 | expense | food | 15000 | 점심 | meal
-TX-000002 | 2024-01-14 | income  | salary | 3000000 | 월급
+TX-000005 | 2026-11-20 | expense | food | 30000 | 저녁 | meal,dinner
+TX-000001 | 2026-11-15 | expense | food | 15000 | 점심 | meal
+TX-000002 | 2026-11-14 | income  | salary | 3000000 | 월급
 $ echo $?
 0
 ```
@@ -338,11 +338,11 @@ $ echo $?
 
 ```text
 $ python -m budget_app search --type expense --tag meal
-TX-000005 | 2024-01-20 | expense | food | 30000 | 저녁 | meal,dinner
-TX-000001 | 2024-01-15 | expense | food | 15000 | 점심 | meal
+TX-000005 | 2026-11-20 | expense | food | 30000 | 저녁 | meal,dinner
+TX-000001 | 2026-11-15 | expense | food | 15000 | 점심 | meal
 
-$ python -m budget_app search --from 2024-01-01 --to 2024-01-13 --q 월
-TX-000004 | 2024-01-01 | expense | rent | 150000 | 월세 | fixed,home
+$ python -m budget_app search --from 2026-11-01 --to 2026-11-13 --q 월
+TX-000004 | 2026-11-01 | expense | rent | 150000 | 월세 | fixed,home
 $ echo $?
 0
 ```
@@ -350,11 +350,11 @@ $ echo $?
 ### 5. budget + summary
 
 ```text
-$ python -m budget_app budget set --month 2024-01 --amount 500000
-[저장 완료] 2024-01 예산 500000원
+$ python -m budget_app budget set --month 2026-11 --amount 500000
+[저장 완료] 2026-11 예산 500000원
 
-$ python -m budget_app summary --month 2024-01 --top 3
-[2024-01 요약]
+$ python -m budget_app summary --month 2026-11 --top 3
+[2026-11 요약]
 총 수입: 3000000원
 총 지출: 215000원
 잔액: 2785000원
@@ -365,20 +365,20 @@ $ python -m budget_app summary --month 2024-01 --top 3
 2) food 45000원
 3) transport 20000원
 
-$ python -m budget_app summary --month 2024-02
-[데이터 없음] 2024-02 거래 내역이 없습니다.
+$ python -m budget_app summary --month 2026-10
+[데이터 없음] 2026-10 거래 내역이 없습니다.
 $ echo $?
 0
 ```
 
-예산 알림 단계별 출력 (위 데이터에서 update 실행 후, 2024-01 총 지출 190000원):
+예산 알림 단계별 출력 (위 데이터에서 update 실행 후, 2026-11 총 지출 190000원):
 
 ```text
-$ python -m budget_app budget set --month 2024-01 --amount 200000
-[저장 완료] 2024-01 예산 200000원
+$ python -m budget_app budget set --month 2026-11 --amount 200000
+[저장 완료] 2026-11 예산 200000원
 
-$ python -m budget_app summary --month 2024-01 --top 3
-[2024-01 요약]
+$ python -m budget_app summary --month 2026-11 --top 3
+[2026-11 요약]
 총 수입: 3000000원
 총 지출: 190000원
 잔액: 2810000원
@@ -391,17 +391,17 @@ $ python -m budget_app summary --month 2024-01 --top 3
 2) transport 25000원
 3) food 15000원
 
-$ python -m budget_app budget set --month 2024-01 --amount 150000
-[저장 완료] 2024-01 예산 150000원
+$ python -m budget_app budget set --month 2026-11 --amount 150000
+[저장 완료] 2026-11 예산 150000원
 
-$ python -m budget_app summary --month 2024-01 --top 3
-[2024-01 요약]
+$ python -m budget_app summary --month 2026-11 --top 3
+[2026-11 요약]
 총 수입: 3000000원
 총 지출: 190000원
 잔액: 2810000원
 예산: 150000원 (사용률 126.7%)
 [경고] 예산을 40000원 초과했습니다!
-[권장] 지출 1위 'rent' 부터 줄이거나, 예산 조정: budget set --month 2024-01 --amount <새 금액>
+[권장] 지출 1위 'rent' 부터 줄이거나, 예산 조정: budget set --month 2026-11 --amount <새 금액>
 
 지출 TOP 3
 1) rent 150000원
@@ -414,7 +414,7 @@ $ python -m budget_app summary --month 2024-01 --top 3
 ```text
 $ python -m budget_app update --id TX-000003 --amount 25000 --memo 택시
 [수정 완료] id=TX-000003
-TX-000003 | 2024-01-12 | expense | transport | 25000 | 택시
+TX-000003 | 2026-11-12 | expense | transport | 25000 | 택시
 $ echo $?
 0
 
@@ -443,15 +443,15 @@ $ echo $?
 ### 8. export
 
 ```text
-$ python -m budget_app export --out export.csv --month 2024-01
+$ python -m budget_app export --out export.csv --month 2026-11
 [완료] export.csv (4 records)
 
 $ cat export.csv
 date,type,category,amount,memo,tags
-2024-01-15,expense,food,15000,점심,meal
-2024-01-14,income,salary,3000000,월급,
-2024-01-12,expense,transport,25000,택시,
-2024-01-01,expense,rent,150000,월세,"fixed,home"
+2026-11-15,expense,food,15000,점심,meal
+2026-11-14,income,salary,3000000,월급,
+2026-11-12,expense,transport,25000,택시,
+2026-11-01,expense,rent,150000,월세,"fixed,home"
 
 $ python -m budget_app export --out export.csv
 [오류] 내보낼 기간 조건이 없습니다.
@@ -487,7 +487,7 @@ $ echo $?
 0
 
 $ python -m budget_app search --category etc
-TX-000001 | 2024-01-15 | expense | etc | 15000 | 점심 | meal
+TX-000001 | 2026-11-15 | expense | etc | 15000 | 점심 | meal
 
 $ python -m budget_app category list
 - transport
@@ -520,13 +520,13 @@ date,type,category,amount,memo,tags
 - 인코딩 UTF-8(BOM 없음), 줄바꿈 CRLF(csv 모듈 기본), 정렬은 최신순입니다. id 컬럼은 포함하지 않습니다.
 - export 결과 파일은 그대로 `import --from` 에 넣을 수 있습니다(같은 스키마).
 
-예시 (`export --out export.csv --month 2024-01` 결과):
+예시 (`export --out export.csv --month 2026-11` 결과):
 
 ```csv
 date,type,category,amount,memo,tags
-2024-01-15,expense,food,15000,점심,meal
-2024-01-14,income,salary,3000000,월급,
-2024-01-01,expense,rent,150000,월세,"fixed,home"
+2026-11-15,expense,food,15000,점심,meal
+2026-11-14,income,salary,3000000,월급,
+2026-11-01,expense,rent,150000,월세,"fixed,home"
 ```
 
 import 는 위 헤더 중 `date,type,category,amount` 가 필수이며, 없으면 오류로 종료합니다. UTF-8 BOM 이 붙은 파일(엑셀 저장)도 읽을 수 있습니다(`utf-8-sig`).
@@ -544,7 +544,7 @@ id 는 import 시 새로 발급되므로 CSV 에 포함하지 않습니다.
 | 잘못된 행이 있을 때 | 그 행만 `[건너뜀] N행: 사유` 출력, 나머지는 저장. 종료 코드 0 | **아무것도 저장하지 않음.** 잘못된 행 목록 출력, 종료 코드 1 |
 | 처리 방식 | 검증하면서 바로 거래 파일에 이어 씀(append) | ① 전체 행 검증만 → ② 통과하면 기존+신규를 임시 파일에 쓰고 `os.replace` 로 한 번에 교체 |
 | 도중에 중단(Ctrl+C, 디스크 오류, 강제 종료) | **그때까지 쓴 행은 남음.** 강제 종료·전원 차단이면 마지막 줄이 반쯤 쓰일 수 있음 → 다음 실행 때 `N번째 줄이 손상되었습니다` 오류 | **원본 파일 그대로.** 임시 파일만 지워짐 |
-| 비용 | CSV 1회 읽기 + 추가분만 쓰기 | CSV 2회 읽기 + 기존 거래 전체 재작성(10만 건이면 약 0.5초 추가) |
+| 비용 | CSV 1회 읽기 + 추가분만 쓰기 | CSV 2회 읽기 + 기존 거래 전체 재작성 (실측: 10만 건 보유 상태에서 1만 행 import 0.63초 → 1.28초) |
 | 언제 쓰나 | 일부 잘못된 행이 있어도 나머지는 넣고 싶을 때, 대용량 | 은행 내역처럼 빠짐없이 들어가야 하는 파일, 처음 이전할 때 |
 
 부분 적용 결과를 되돌리는 방법 (기본 모드):
@@ -596,27 +596,28 @@ python scripts/benchmark.py --rows 1000000  # 1,000,000건
 ```
 
 측정 환경: macOS, Apple M1 Pro, Python 3.9.6, 내장 SSD. 값은 환경마다 다르므로 비율로 보세요.
+생성 데이터: 2022-01-01 ~ 2026-11-22(최근 5년) 사이 무작위 날짜, 시드 42 고정이라 매번 같은 데이터가 만들어집니다.
 
 ### 1) 명령별 소요 시간 — 건수에 정비례(O(N))
 
-| 명령 | 10만 건 (12.9 MiB) | 100만 건 (128.5 MiB) |
+| 명령 | 10만 건 (12.8 MiB) | 100만 건 (128.5 MiB) |
 | --- | ---: | ---: |
-| `list --limit 10` | 0.40초 | 4.03초 |
-| `search --q 점심 --limit 10` | 0.41초 | 4.07초 |
-| `search --category food` (결과 전체 정렬) | 0.42초 | 4.39초 |
-| `summary --month 2024-01` | 0.39초 | 3.96초 |
-| `export --from 2020-01-01 --to 2024-12-31` (전체 내보내기) | 0.64초 | 6.45초 |
+| `list --limit 10` | 0.40초 | 4.01초 |
+| `search --q 점심 --limit 10` | 0.41초 | 4.06초 |
+| `search --category food` (결과 전체 정렬) | 0.42초 | 4.37초 |
+| `summary --month 2026-11` | 0.39초 | 4.08초 |
+| `export --from 2022-01-01 --to 2026-11-22` (전체 내보내기) | 0.63초 | 6.50초 |
 | `add` (1건 추가, id 발급용 전체 스캔 포함) | 0.41초 | 4.22초 |
-| `update` / `delete` (전체 재작성) | 0.75초 | 7.49초 |
-| `import` 1만 행 (배치 쓰기, id 발급 스캔 약 0.4초 포함) | 0.62초 | – |
+| `update` / `delete` (전체 재작성) | 0.80초 | 7.72초 |
+| `import` 1만 행 (배치 쓰기, id 발급 스캔 포함) | 0.63초 | 4.42초 |
 
 ### 2) 메모리 — 스트리밍이라 건수와 무관하게 일정
 
 | 측정 | 10만 건 | 100만 건 |
 | --- | ---: | ---: |
 | `svc.latest(10)` 파이썬 객체 최대 메모리 (tracemalloc) | 0.05 MiB | 0.05 MiB |
-| 비교: `list(repo.iter_all())` 로 전체 로드했다면 | 58.1 MiB | 583.2 MiB |
-| `python -m budget_app list --limit 3` 프로세스 최대 RSS (`/usr/bin/time -l`) | 15.1 MB | 15.1 MB |
+| 비교: `list(repo.iter_all())` 로 전체 로드했다면 | 62.2 MiB | 587.3 MiB |
+| `python -m budget_app list --limit 3` 프로세스 최대 RSS (`/usr/bin/time -l`) | 15.3 MB | 15.2 MB |
 
 데이터가 10배 늘어도 메모리는 그대로입니다. `heapq.nlargest(limit, 제너레이터)` 가 상위 N건만 유지하기 때문입니다.
 (예외: `search` 에 `--limit` 을 주지 않으면 결과 전체를 정렬하므로 **매칭 건수만큼** 메모리를 씁니다. 결과가 많을 때는 `--limit` 을 쓰세요.)
@@ -625,14 +626,14 @@ python scripts/benchmark.py --rows 1000000  # 1,000,000건
 
 | `open(..., buffering=)` | 읽기+JSON 파싱 (100만 건) | 파싱+쓰기 (100만 건) |
 | ---: | ---: | ---: |
-| 4 KiB | 1.967초 | 5.200초 |
-| **8 KiB (기본값 `io.DEFAULT_BUFFER_SIZE`)** | **1.967초** | **5.193초** |
-| 64 KiB | 1.966초 | 5.102초 |
-| 1 MiB | 1.969초 | 5.079초 |
+| 4 KiB | 1.992초 | 5.347초 |
+| **8 KiB (기본값 `io.DEFAULT_BUFFER_SIZE`)** | **2.014초** | **5.554초** |
+| 64 KiB | 1.996초 | 5.448초 |
+| 1 MiB | 2.055초 | 5.350초 |
 
-읽기는 차이가 0.2% 이내, 쓰기도 최대 2% 수준입니다. 그래서 코드는 **기본 버퍼를 그대로** 씁니다.
+읽기는 최대 3%, 쓰기는 최대 4% 차이이고, 버퍼가 클수록 빨라지는 경향도 없습니다(측정 잡음 수준). 10만 건에서는 읽기 0.5%, 쓰기 2% 이내였습니다. 그래서 코드는 **기본 버퍼를 그대로** 씁니다.
 버퍼를 키워도 빨라지지 않는 이유는 병목이 디스크 I/O 가 아니라 **CPU(JSON 파싱 + 객체 생성)** 이기 때문입니다.
-`/usr/bin/time -l` 결과 100만 건 `list` 에서 user 3.97초, sys(커널 I/O) 0.06초였습니다.
+`/usr/bin/time -l` 결과 100만 건 `list` 에서 user 4.05초, sys(커널 I/O) 0.07초였습니다.
 (네트워크 드라이브처럼 I/O 가 느린 저장소라면 64 KiB~1 MiB 가 도움이 될 수 있으니 위 스크립트로 직접 측정하세요.)
 
 ### 4) 프로파일링 방법 — 어디서 시간이 드는가
@@ -650,33 +651,33 @@ python -m budget_app --verbose list --limit 3
 
 | 구간 | 함수 | 시간 | 비율 |
 | --- | --- | ---: | ---: |
-| JSON 파싱 | `json.loads` | 0.25초 | 약 43% |
+| JSON 파싱 | `json.loads` | 0.25초 | 약 42% |
 | 객체 생성 | `Transaction.from_dict` + dataclass `__init__` | 0.19초 | 약 33% |
 | 파일 줄 읽기 + 제너레이터 | `JsonlFile.iter_records` 자체 | 0.05초 | 약 9% |
-| 상위 N 유지 | `heapq.nlargest` + `_newest_key` | 0.04초 | 약 7% |
+| 상위 N 유지 | `heapq.nlargest` + `_newest_key` | 0.04초 | 약 6% |
 
 ### 5) 시나리오별 병목 분석 (10만 건)
 
 각 명령을 cProfile 로 측정해 "파일을 몇 번 훑는가(스캔 횟수)" 와 "시간이 어디서 쓰이는가" 를 정리했습니다.
-N = 거래 건수. 공통 바탕 비용은 **한 줄당 약 4µs** (JSON 파싱 43% + `Transaction` 생성 33% + 줄 읽기 9%, 위 4) 표)입니다.
+N = 거래 건수. 공통 바탕 비용은 **한 줄당 약 4µs** (JSON 파싱 42% + `Transaction` 생성 33% + 줄 읽기 9%, 위 4) 표)입니다.
 
 | 시나리오 | 10만 건 시간 | 스캔/쓰기 횟수 | 병목 (측정 근거) | 분류 |
 | --- | ---: | --- | --- | --- |
 | `list`, `search`, `summary` | 0.39~0.42초 | 읽기 1회(N) | 전 줄을 파싱해 `Transaction` 을 만든 뒤 걸러냄. 조건에 안 맞는 줄도 객체 생성 비용을 냄 | CPU |
-| `export` | 0.64초 | 읽기 1회 + CSV 쓰기 | 위 + CSV 직렬화 | CPU |
+| `export` | 0.63초 | 읽기 1회 + CSV 쓰기 | 위 + CSV 직렬화 | CPU |
 | `add` | 0.41초 | 읽기 1회(N) + 추가 1줄 | **`next_number()` 가 id 발급만을 위해 전체를 스캔.** 실제 저장(append)은 1ms 미만 | CPU (불필요한 스캔) |
-| `update`, `delete` | 0.75초 | 읽기 약 1.5회 + 쓰기 1회(N) | ① `_require()`(`repo.get`)가 대상 id 까지 스캔(평균 N/2) ② 원자적 교체를 위해 전체를 다시 파싱·직렬화(`json.dumps` 10만 회 ≈ 0.25초) | CPU (재작성) |
+| `update`, `delete` | 0.80초 | 읽기 약 1.5회 + 쓰기 1회(N) | ① `_require()`(`repo.get`)가 대상 id 까지 스캔(평균 N/2, 중간 id 기준 0.28초) ② 원자적 교체를 위해 전체를 다시 파싱·직렬화(`json.dumps` 10만 회 ≈ 0.34초, 프로파일러 포함) | CPU (재작성) |
 | `category remove` (사용 중) | 1ms 이하 | 읽기 일부 | `any()` 가 첫 사용 거래에서 멈춤 | – |
-| `category remove --replace-with` | 약 0.75초 | 읽기 1회 + 쓰기 1회 | update 와 같은 전체 재작성 | CPU (재작성) |
-| `import` 1만 행 (개선 전) | 0.95초 | **행마다 파일 2번 열기** (2만 회) | 프로파일: 거래 파일 `append` 47%, 행마다 `categories.jsonl` 다시 읽는 `check_category` 34% | **I/O 호출 횟수** |
+| `category remove --replace-with` | 약 0.8초 | 읽기 1회 + 쓰기 1회 | update 와 같은 전체 재작성 | CPU (재작성) |
+| `import` 1만 행 (개선 전) | 0.94초 | **행마다 파일 2번 열기** (2만 회) | 프로파일: 거래 파일 `append` 50%, 행마다 `categories.jsonl` 다시 읽는 `check_category` 33% | **I/O 호출 횟수** |
 | `import` 1만 행 (개선 후) | **0.22초** | 카테고리 1회 + 거래 파일 1회 열기 | 행 검증(`parse_*`) + `json.dumps` | CPU |
 
 ### 6) 적용한 개선: import 배치 처리
 
-| 측정 (빈 data 폴더에 import, 3회 중 최솟값) | 개선 전 | 개선 후 | 효과 |
+| 측정 (빈 data 폴더에 import, 3회 중 최솟값) | 개선 전 (커밋 `a8220d5`) | 개선 후 | 효과 |
 | --- | ---: | ---: | ---: |
-| 1만 행 | 0.946초 | 0.215초 | 4.4배 |
-| 10만 행 | 9.487초 | 2.135초 | 4.4배 |
+| 1만 행 | 0.935초 | 0.216초 | 4.3배 |
+| 10만 행 | 9.338초 | 2.140초 | 4.4배 |
 
 - 카테고리 목록을 import 시작 시 **한 번만 읽어 `set`** 으로 검사합니다(`check_category(name, known)`). 이전에는 행마다 파일을 다시 읽었습니다.
 - 검증을 통과한 행을 제너레이터로 흘려 **파일을 한 번만 열고 이어 씁니다**(`TransactionRepository.add_many` → `JsonlFile.append_many`). 메모리는 여전히 행 수와 무관합니다.
@@ -690,9 +691,9 @@ N = 거래 건수. 공통 바탕 비용은 **한 줄당 약 4µs** (JSON 파싱 
 | --- | --- | --- | --- | --- |
 | 1 | `add`, `import` 의 id 발급 | **id 카운터 파일** `data/meta.json` 에 `{"next_id": 100001}` 저장. `@locked` 안에서 읽고 +1 해서 씀. 파일이 없거나 깨지면 지금처럼 전체 스캔으로 복구 | `add` 0.41초 → 수 ms (O(N) → O(1)) | 파일 4개째. 데이터 파일과 어긋나지 않게 반드시 잠금 안에서 함께 갱신 |
 | 2 | `search`/`summary`/`export` | **객체 생성 전에 dict 단계에서 거르기**: 날짜·카테고리 조건을 `json.loads` 결과(dict)에서 먼저 보고, 맞는 줄만 `Transaction.from_dict` | 조건이 좁을수록 최대 약 33% 감소 (객체 생성 비용) | 필터 로직이 dict/객체 두 곳에 생기지 않게 정리 필요 |
-| 3 | `summary`, 월 단위 `export` | **월별 파일 분할** `transactions/2024-01.jsonl`. 월 조건이면 해당 파일만 읽음 | 5년치 데이터면 읽는 양 1/60 → 수 ms | `list`(전체 최신순)는 최신 월부터 역순으로 읽어야 함. update 로 날짜가 바뀌면 파일 간 이동 |
+| 3 | `summary`, 월 단위 `export` | **월별 파일 분할** `transactions/2026-11.jsonl`. 월 조건이면 해당 파일만 읽음 | 5년치 데이터면 읽는 양 1/60 → 수 ms | `list`(전체 최신순)는 최신 월부터 역순으로 읽어야 함. update 로 날짜가 바뀌면 파일 간 이동 |
 | 4 | `summary` 반복 실행 | **월별 집계 캐시** `data/summary_cache.json`. 쓰기 명령이 해당 월 캐시를 무효화 | 캐시 적중 시 O(1) | 무효화 누락 시 틀린 값이 나옴 → 쓰기 경로 전체에 적용 필요 |
-| 5 | `update`/`delete` 의 id 찾기 | **id 인덱스 파일** (id → 줄 번호/바이트 오프셋) | `_require()` 스캔(평균 N/2) 제거 → 0.75초 → 약 0.5초 | 재작성 비용(N)은 남음. 재작성할 때마다 인덱스도 다시 만들어야 함 |
+| 5 | `update`/`delete` 의 id 찾기 | **id 인덱스 파일** (id → 줄 번호/바이트 오프셋) | `_require()` 스캔(평균 N/2) 제거 → 0.80초 → 약 0.5초 | 재작성 비용(N)은 남음. 재작성할 때마다 인덱스도 다시 만들어야 함 |
 | 6 | `update`/`delete` 의 재작성 | **추가 전용 로그 + 주기적 압축**: 수정은 새 버전을, 삭제는 `{"id":…, "deleted":true}` 를 append 하고, 읽을 때 마지막 버전만 사용. `compact` 명령으로 정리 | 수정·삭제 O(1) | 읽기 쪽이 id 별 최신 버전을 가려야 해서 복잡해지고 메모리 사용이 늘어남 |
 | 7 | 100만 건 이상 | **`sqlite3`(표준 라이브러리)** 로 전환, `date`/`category`/`id` 인덱스 | 모든 조회가 인덱스 탐색, 트랜잭션·잠금 기본 제공 | 이번 미션 조건(JSONL/CSV 파일 저장)과 맞지 않아 미적용 |
 
@@ -755,7 +756,7 @@ $ echo $?
 svc.latest("10")                 # limit 은 int
 tx = svc.repo.get("TX-000001")
 print(tx.amount)                 # get() 은 Transaction | None → None 확인 필요
-s = svc.summary("2024-01", 3)
+s = svc.summary("2026-11", 3)
 s.balance = 0                    # Summary 는 frozen, balance 는 읽기 전용
 ```
 
@@ -877,7 +878,7 @@ $ python -m budget_app --verbose delete --id TX-999999
 - **서비스/저장소는 상태가 없음**: 명령이 실행될 때마다 `BudgetService` 가 새로 만들어지고, 끝나면 사라집니다.
 
 ```python
-tx = Transaction("TX-000001", "2024-01-15", "expense", "food", 15000, "점심", ("meal",))
+tx = Transaction("TX-000001", "2026-11-15", "expense", "food", 15000, "점심", ("meal",))
 tx.amount = 20000                           # dataclasses.FrozenInstanceError
 changed = dataclasses.replace(tx, amount=20000)  # 수정 = 새 인스턴스 (tx 는 그대로)
 ```
@@ -895,10 +896,10 @@ cli.py ──(str 원본 입력, argparse.Namespace)──▶ service.py ──(
 
 | 경계 | 들어가는 값 | 나오는 값 | 오류 |
 | --- | --- | --- | --- |
-| cli → service | 사용자 입력 **문자열 그대로**(`"15000"`, `"2024-01-15"`, `"meal,lunch"`) | `Transaction`, `list[Transaction]`, `Summary`, 처리 건수 `int` | `AppError` 발생 |
+| cli → service | 사용자 입력 **문자열 그대로**(`"15000"`, `"2026-11-15"`, `"meal,lunch"`) | `Transaction`, `list[Transaction]`, `Summary`, 처리 건수 `int` | `AppError` 발생 |
 | service → storage | **검증이 끝난** `Transaction` / `str` / `int` | `Iterator[Transaction]`(스트리밍), `int \| None` 등 | 손상된 줄은 `AppError`, 파일 오류는 `OSError` |
 | storage → 파일 | `dict[str, Any]` (JSON 한 줄) / `Transaction` (CSV 한 행) | `Iterator[dict[str, Any]]` / `Iterator[tuple[int, dict[str, str]]]` (CSV 행 번호, 원본 문자열) | CSV 파일 없음·헤더 누락은 `AppError` |
-| models | 원본 `str` | 정규화된 값(`"2024-01-15"`, `15000`, `["meal"]`) | 형식 오류 시 `AppError` |
+| models | 원본 `str` | 정규화된 값(`"2026-11-15"`, `15000`, `["meal"]`) | 형식 오류 시 `AppError` |
 | decorators | `Callable[..., None]` | `Callable[..., int]` (종료 코드) | 예외를 잡아 출력, 밖으로 던지지 않음 |
 
 규칙:
@@ -923,8 +924,8 @@ class Transaction:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Transaction
 
-def parse_date(text: str) -> str          # "2024-01-15" 형식 검증·정규화, 실패 시 AppError
-def parse_month(text: str) -> str         # "2024-01"
+def parse_date(text: str) -> str          # "2026-11-15" 형식 검증·정규화, 실패 시 AppError
+def parse_month(text: str) -> str         # "2026-11"
 def parse_type(text: str) -> str          # "income" | "expense"
 def parse_amount(text: str | int) -> int  # 양의 정수
 def parse_tags(text: str) -> tuple[str, ...]  # "a, b" -> ("a", "b")

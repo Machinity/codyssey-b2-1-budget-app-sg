@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import tracemalloc
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -28,16 +29,21 @@ from budget_app.service import BudgetService  # noqa: E402
 from budget_app.storage import TransactionRepository  # noqa: E402
 
 CATEGORIES = ["food", "transport", "rent", "salary", "etc"]
+# 생성 데이터의 날짜 범위: 최근 5년 (재현성을 위해 고정값, 미래 날짜 없음)
+DATE_FROM = date(2022, 1, 1)
+DATE_TO = date(2026, 11, 22)
+SUMMARY_MONTH = "2026-11"
 
 
 def make_data(data_dir: Path, rows: int) -> None:
     rnd = random.Random(42)
+    span = (DATE_TO - DATE_FROM).days
     data_dir.mkdir(parents=True, exist_ok=True)
     with (data_dir / "transactions.jsonl").open("w", encoding="utf-8") as f:
         for i in range(1, rows + 1):
             rec = {
                 "id": f"TX-{i:06d}",
-                "date": f"{rnd.randint(2020, 2024)}-{rnd.randint(1, 12):02d}-{rnd.randint(1, 28):02d}",
+                "date": (DATE_FROM + timedelta(days=rnd.randint(0, span))).isoformat(),
                 "type": "income" if rnd.random() < 0.1 else "expense",
                 "category": rnd.choice(CATEGORIES),
                 "amount": rnd.randint(1000, 100000),
@@ -91,17 +97,17 @@ def main() -> None:
 
         svc = BudgetService(data)
         import_csv = Path(tmp) / "import.csv"
-        import_csv.write_text("date,type,category,amount\n" + "2024-01-01,expense,food,100\n" * 10_000,
+        import_csv.write_text("date,type,category,amount\n" + "2026-11-01,expense,food,100\n" * 10_000,
                               encoding="utf-8")
         mid = f"TX-{rows // 2:06d}"
         cases: list[tuple[str, Callable[[], object]]] = [
             ("list --limit 10", lambda: svc.latest(10)),
             ("search --q 점심 --limit 10", lambda: svc.search(q="점심", limit=10)),
             ("search --category food (전체 정렬)", lambda: svc.search(category="food")),
-            ("summary --month 2024-01", lambda: svc.summary("2024-01", 3)),
-            ("export --from 2020-01-01 --to 2024-12-31", lambda: svc.export_csv(Path(tmp) / "out.csv", None,
-                                                                                 "2020-01-01", "2024-12-31")),
-            ("add (1건 append, id 발급 위해 전체 스캔)", lambda: svc.add("2024-01-01", "expense", "food", 1000)),
+            (f"summary --month {SUMMARY_MONTH}", lambda: svc.summary(SUMMARY_MONTH, 3)),
+            (f"export --from {DATE_FROM} --to {DATE_TO} (전체)",
+             lambda: svc.export_csv(Path(tmp) / "out.csv", None, DATE_FROM.isoformat(), DATE_TO.isoformat())),
+            ("add (1건 append, id 발급 위해 전체 스캔)", lambda: svc.add("2026-11-01", "expense", "food", 1000)),
             ("import --from (1만 행, 배치 쓰기)", lambda: svc.import_csv(import_csv)),
             ("update --id (전체 재작성)", lambda: svc.update(mid, amount="1234")),
             ("delete --id (전체 재작성)", lambda: svc.delete(mid)),

@@ -29,15 +29,15 @@ check() {
   fi
 }
 
-check 0   "add (정상)"               '2024-01-15\nexpense\nfood\n15000\n점심\nmeal\n' add
+check 0   "add (정상)"               '2026-11-15\nexpense\nfood\n15000\n점심\nmeal\n' add
 check 0   "list (정상)"              '' list --limit 5
-check 0   "budget set (정상)"        '' budget set --month 2024-01 --amount 500000
-check 0   "summary (정상)"           '' summary --month 2024-01
-check 0   "export (정상)"            '' export --out out.csv --month 2024-01
+check 0   "budget set (정상)"        '' budget set --month 2026-11 --amount 500000
+check 0   "summary (정상)"           '' summary --month 2026-11
+check 0   "export (정상)"            '' export --out out.csv --month 2026-11
 check 1   "delete 없는 id"           '' delete --id TX-999999
 check 1   "export 기간 조건 없음"    '' export --out x.csv
 check 1   "import 파일 없음"         '' import --from none.csv
-check 1   "summary 월 형식 오류"     '' summary --month 2024/01
+check 1   "summary 월 형식 오류"     '' summary --month 2026/11
 check 1   "category 사용 중 삭제"    '' category remove --name food
 check 2   "summary --month 누락"     '' summary
 check 2   "list --limit 형식 오류"   '' list --limit abc
