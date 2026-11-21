@@ -1,7 +1,7 @@
 """모델 계층: 데이터 구조와 값 검증."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
@@ -17,18 +17,22 @@ class AppError(Exception):
         self.hint = hint
 
 
-@dataclass
+@dataclass(frozen=True)
 class Transaction:
+    """거래 1건 (불변 값 객체). 수정은 새 인스턴스를 만들어 교체한다."""
+
     id: str
     date: str  # YYYY-MM-DD
     type: str  # income / expense
     category: str
     amount: int  # 양수
     memo: str = ""
-    tags: list[str] = field(default_factory=list)
+    tags: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["tags"] = list(self.tags)  # JSON 저장용
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Transaction:
@@ -39,7 +43,7 @@ class Transaction:
             category=str(data["category"]),
             amount=int(data["amount"]),
             memo=str(data.get("memo", "")),
-            tags=list(data.get("tags", [])),
+            tags=tuple(data.get("tags", [])),
         )
 
 
@@ -74,5 +78,5 @@ def parse_amount(text: str | int) -> int:
     return value
 
 
-def parse_tags(text: str) -> list[str]:
-    return [t.strip() for t in text.split(",") if t.strip()]
+def parse_tags(text: str) -> tuple[str, ...]:
+    return tuple(t.strip() for t in text.split(",") if t.strip())
