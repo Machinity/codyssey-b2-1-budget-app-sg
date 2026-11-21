@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Callable, Iterable
 
-from .decorators import cli_command
+from .decorators import handle_errors, log_call, timed
 from .models import AppError, Transaction, parse_amount, parse_date, parse_month, parse_type
 from .service import BudgetService
 
@@ -74,10 +74,14 @@ def cmd_summary(svc: BudgetService, args: argparse.Namespace) -> None:
     print(f"총 지출: {s.expense}원")
     print(f"잔액: {s.balance}원")
     if s.budget is not None:
-        rate = s.expense / s.budget * 100
-        print(f"예산: {s.budget}원 (사용률 {rate:.1f}%)")
-        if s.expense > s.budget:
+        print(f"예산: {s.budget}원 (사용률 {s.usage_rate:.1f}%)")
+        top_hint = f"지출 1위 '{s.top[0][0]}' 부터 줄이거나, " if s.top else ""
+        if s.budget_level == "over":
             print(f"[경고] 예산을 {s.expense - s.budget}원 초과했습니다!")
+            print(f"[권장] {top_hint}예산 조정: budget set --month {s.month} --amount <새 금액>")
+        elif s.budget_level == "caution":
+            print(f"[주의] 예산의 {s.usage_rate:.1f}%를 사용했습니다. (남은 예산 {s.budget - s.expense}원)")
+            print(f"[권장] {top_hint}남은 기간 지출을 계획하세요.")
     print(f"\n지출 TOP {args.top}")
     if not s.top:
         print("(지출 없음)")
@@ -109,7 +113,9 @@ def cmd_category_list(svc: BudgetService, args: argparse.Namespace) -> None:
 
 def cmd_category_remove(svc: BudgetService, args: argparse.Namespace) -> None:
     name = args.name if args.name is not None else input("삭제할 카테고리명: ")
-    svc.remove_category(name)
+    moved = svc.remove_category(name, args.replace_with)
+    if args.replace_with:
+        print(f"[이동 완료] {name} → {args.replace_with} ({moved}건)")
     print(f"[삭제 완료] category={name}")
 
 
@@ -126,10 +132,13 @@ def cmd_delete(svc: BudgetService, args: argparse.Namespace) -> None:
 
 
 def cmd_import(svc: BudgetService, args: argparse.Namespace) -> None:
-    imported, skipped, errors = svc.import_csv(Path(args.src))
-    for msg in errors:
+    r = svc.import_csv(Path(args.src), atomic=args.atomic)
+    for msg in r.errors:
         print(f"[건너뜀] {msg}")
-    print(f"[완료] imported={imported}, skipped={skipped}")
+    id_range = f" (id {r.first_id} ~ {r.last_id})" if r.first_id else ""
+    print(f"[완료] imported={r.imported}, skipped={r.skipped}{id_range}")
+    if r.skipped and not args.atomic:
+        print("[안내] 부분 적용: 위 행만 빠지고 나머지는 이미 저장되었습니다. 되돌리려면 위 id 범위를 delete 하세요.")
 
 
 def cmd_export(svc: BudgetService, args: argparse.Namespace) -> None:
@@ -184,8 +193,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--name")
     s.set_defaults(func=cmd_category_add)
     c.add_parser("list", help="카테고리 목록").set_defaults(func=cmd_category_list)
-    s = c.add_parser("remove", help="카테고리 삭제 (사용 중이면 거부)")
+    s = c.add_parser("remove", help="카테고리 삭제 (사용 중이면 거부, --replace-with 로 대체 후 삭제)")
     s.add_argument("--name")
+    s.add_argument("--replace-with", help="사용 중인 거래를 옮길 대체 카테고리")
     s.set_defaults(func=cmd_category_remove)
 
     s = sub.add_parser("update", help="거래 수정 (옵션 방식)")
@@ -202,8 +212,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--id", required=True)
     s.set_defaults(func=cmd_delete)
 
-    s = sub.add_parser("import", help="CSV 가져오기")
+    s = sub.add_parser("import", help="CSV 가져오기 (기본: 잘못된 행만 건너뛰는 부분 적용)")
     s.add_argument("--from", dest="src", required=True, help="CSV 파일 경로")
+    s.add_argument("--atomic", action="store_true",
+                   help="전부 아니면 전무: 잘못된 행이 하나라도 있으면 아무것도 가져오지 않음")
     s.set_defaults(func=cmd_import)
 
     s = sub.add_parser("export", help="CSV 내보내기 (--month 또는 --from/--to 필수)")
@@ -215,7 +227,9 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-@cli_command
+@handle_errors  # 바깥: 예외 → [오류]/[힌트] + 종료 코드
+@log_call       # 가운데: 시작/종료/예외 로그 (예외는 다시 던짐)
+@timed          # 안쪽: 명령 자체의 소요 시간
 def run(args: argparse.Namespace) -> None:
     svc = BudgetService(Path(args.data_dir))
     args.func(svc, args)

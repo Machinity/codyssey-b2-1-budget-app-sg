@@ -1,7 +1,6 @@
 """서비스 계층: 비즈니스 규칙 (검증, 검색, 요약, 가져오기/내보내기)."""
 from __future__ import annotations
 
-import csv
 import heapq
 from collections import defaultdict
 from dataclasses import dataclass
@@ -16,17 +15,20 @@ from .models import (
     parse_tags,
     parse_type,
 )
-from .storage import BudgetStore, CategoryStore, TransactionRepository
+from .decorators import locked, timed
+from .storage import BudgetStore, CategoryStore, CsvTransactionFile, TransactionRepository
 
-CSV_FIELDS = ["date", "type", "category", "amount", "memo", "tags"]
+CAUTION_RATE = 80.0  # 이 사용률(%) 이상이면 [주의]
 
 
 def _newest_key(t: Transaction) -> tuple[str, str]:
     return (t.date, t.id)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Summary:
+    """월별 요약 결과 (불변). BudgetService.summary() 가 만들고 cli 가 읽기만 한다."""
+
     month: str
     income: int
     expense: int
@@ -38,17 +40,45 @@ class Summary:
     def balance(self) -> int:
         return self.income - self.expense
 
+    @property
+    def usage_rate(self) -> float | None:
+        return None if self.budget is None else self.expense / self.budget * 100
+
+    @property
+    def budget_level(self) -> str | None:
+        """예산 알림 단계: None(예산 없음) / ok(<80%) / caution(80~100%) / over(>100%)."""
+        rate = self.usage_rate
+        if rate is None:
+            return None
+        if self.expense > (self.budget or 0):
+            return "over"
+        return "caution" if rate >= CAUTION_RATE else "ok"
+
+
+@dataclass(frozen=True)
+class ImportResult:
+    """import 결과 (불변). first_id~last_id 는 이번에 추가된 거래의 id 범위(연속)."""
+
+    imported: int
+    skipped: int
+    errors: list[str]
+    first_id: str | None
+    last_id: str | None
+
 
 class BudgetService:
     def __init__(self, data_dir: Path) -> None:
+        self.data_dir = data_dir  # @locked 가 data_dir/.lock 을 잠근다
         self.repo = TransactionRepository(data_dir)
         self.categories = CategoryStore(data_dir)
         self.budgets = BudgetStore(data_dir)
 
     # ---------- 검증 ----------
-    def check_category(self, name: str) -> str:
+    def check_category(self, name: str, known: set[str] | None = None) -> str:
+        """등록된 카테고리인지 확인한다. known 을 주면 파일 대신 그 집합으로 확인(배치용)."""
         name = name.strip()
-        if not self.categories.exists(name):
+        exists = name in known if known is not None else self.categories.exists(name)
+        if not exists:
             raise AppError(
                 f"존재하지 않는 카테고리입니다: {name!r}",
                 f"등록된 카테고리: {', '.join(self.categories.list())} "
@@ -57,12 +87,13 @@ class BudgetService:
         return name
 
     def _build(self, tx_id: str, date: str, type_: str, category: str,
-               amount: str | int, memo: str = "", tags: str = "") -> Transaction:
+               amount: str | int, memo: str = "", tags: str = "",
+               known: set[str] | None = None) -> Transaction:
         return Transaction(
             id=tx_id,
             date=parse_date(date),
             type=parse_type(type_),
-            category=self.check_category(category),
+            category=self.check_category(category, known),
             amount=parse_amount(amount),
             memo=memo.strip(),
             tags=parse_tags(tags),
@@ -73,6 +104,7 @@ class BudgetService:
         return f"TX-{number:06d}"
 
     # ---------- 거래 CRUD ----------
+    @locked  # 쓰기 작업: 동시 실행 방지
     def add(self, date: str, type_: str, category: str, amount: str | int,
             memo: str = "", tags: str = "") -> Transaction:
         tx = self._build(self._make_id(self.repo.next_number()), date, type_, category, amount, memo, tags)
@@ -85,6 +117,7 @@ class BudgetService:
             raise AppError(f"없는 데이터입니다: id={tx_id}", "python -m budget_app list 로 id 를 확인하세요.")
         return tx
 
+    @locked  # 쓰기 작업: 동시 실행 방지
     def update(self, tx_id: str, date: str | None = None, type_: str | None = None,
                category: str | None = None, amount: str | None = None,
                memo: str | None = None, tags: str | None = None) -> Transaction:
@@ -103,6 +136,7 @@ class BudgetService:
         self.repo.replace(tx_id, new)
         return new
 
+    @locked  # 쓰기 작업: 동시 실행 방지
     def delete(self, tx_id: str) -> None:
         self._require(tx_id)
         self.repo.replace(tx_id, None)
@@ -154,10 +188,12 @@ class BudgetService:
         return Summary(month, income, expense, count, top_list, self.budgets.get(month))
 
     # ---------- 예산 ----------
+    @locked  # 쓰기 작업: 동시 실행 방지
     def set_budget(self, month: str, amount: int) -> None:
         self.budgets.set(month, amount)
 
     # ---------- 카테고리 ----------
+    @locked  # 쓰기 작업: 동시 실행 방지
     def add_category(self, name: str) -> str:
         name = name.strip()
         if not name:
@@ -167,53 +203,79 @@ class BudgetService:
         self.categories.add(name)
         return name
 
-    def remove_category(self, name: str) -> None:
-        self.check_category(name)
-        if any(t.category == name for t in self.repo.iter_all()):
-            raise AppError(
-                f"사용 중인 카테고리는 삭제할 수 없습니다: {name}",
-                f"search --category {name} 로 해당 거래를 확인하고 update 로 카테고리를 바꾼 뒤 다시 시도하세요.",
-            )
+    @locked  # 쓰기 작업: 동시 실행 방지
+    def remove_category(self, name: str, replace_with: str | None = None) -> int:
+        """카테고리를 삭제한다. 사용 중이면 거부하되, replace_with 를 주면
+        해당 거래를 대체 카테고리로 옮긴 뒤 삭제한다. 옮긴 거래 수를 돌려준다."""
+        name = self.check_category(name)
+        if replace_with is None:
+            if any(t.category == name for t in self.repo.iter_all()):
+                raise AppError(
+                    f"사용 중인 카테고리는 삭제할 수 없습니다: {name}",
+                    f"대체 카테고리로 옮긴 뒤 삭제: category remove --name {name} --replace-with <카테고리>"
+                    f" (사용 거래 확인: search --category {name})",
+                )
+            self.categories.remove(name)
+            return 0
+        target = self.check_category(replace_with)
+        if target == name:
+            raise AppError("대체 카테고리가 삭제할 카테고리와 같습니다.", "다른 카테고리를 지정하세요.")
+        moved = self.repo.rename_category(name, target)
         self.categories.remove(name)
+        return moved
 
     # ---------- 가져오기/내보내기 ----------
-    def import_csv(self, path: Path) -> tuple[int, int, list[str]]:
-        if not path.is_file():
-            raise AppError(f"파일을 찾을 수 없습니다: {path}", "경로를 확인하세요.")
-        imported = skipped = 0
+    @timed  # 대량 처리: 소요 시간 로그
+    @locked  # 쓰기 작업: 동시 실행 방지
+    def import_csv(self, path: Path, atomic: bool = False) -> ImportResult:
+        """CSV 행을 검증해 등록한다.
+
+        - 기본(부분 적용): 잘못된 행은 건너뛰고 사유를 모은다. 검증을 통과한 행은 바로 이어 쓴다(append).
+          롤백 기능은 없다. 대신 결과의 first_id~last_id 로 이번에 추가된 거래를 알 수 있다.
+        - atomic=True(전부 아니면 전무): 1차로 모든 행을 검증만 하고, 하나라도 틀리면 아무것도
+          쓰지 않고 AppError. 모두 맞으면 기존+신규를 임시 파일에 쓴 뒤 os.replace 로 한 번에 교체한다.
+          중간에 중단돼도 원본 파일은 그대로다.
+
+        배치 처리: 카테고리 목록은 한 번만 읽고(set), 거래 파일은 한 번만 열어 스트리밍으로 쓴다.
+        """
+        known = set(self.categories.list())
+        start = self.repo.next_number()
         errors: list[str] = []
-        number = self.repo.next_number()
-        with path.open(encoding="utf-8-sig", newline="") as f:
-            reader = csv.DictReader(f)
-            missing = {"date", "type", "category", "amount"} - set(reader.fieldnames or [])
-            if missing:
-                raise AppError(f"CSV 필수 컬럼이 없습니다: {', '.join(sorted(missing))}",
-                               f"헤더 예: {','.join(CSV_FIELDS)}")
-            for lineno, row in enumerate(reader, start=2):
+
+        def valid_rows() -> Iterator[Transaction]:
+            number = start
+            for lineno, row in CsvTransactionFile(path).iter_rows():
                 try:
-                    tx = self._build(self._make_id(number), row.get("date") or "", row.get("type") or "",
-                                     row.get("category") or "", row.get("amount") or "",
-                                     row.get("memo") or "", row.get("tags") or "")
+                    tx = self._build(self._make_id(number), row["date"], row["type"], row["category"],
+                                     row["amount"], row["memo"], row["tags"], known)
                 except AppError as e:
-                    skipped += 1
                     errors.append(f"{lineno}행: {e.message}")
                     continue
-                self.repo.add(tx)
                 number += 1
-                imported += 1
-        return imported, skipped, errors
+                yield tx
 
+        if atomic:
+            for _ in valid_rows():  # 1차: 검증만 (아무것도 쓰지 않음)
+                pass
+            if errors:
+                shown = "\n".join(f"  - {m}" for m in errors[:20])
+                more = f"\n  ... 외 {len(errors) - 20}행" if len(errors) > 20 else ""
+                raise AppError(
+                    f"잘못된 행 {len(errors)}개가 있어 아무것도 가져오지 않았습니다 (--atomic).\n{shown}{more}",
+                    "해당 행을 고친 뒤 다시 실행하거나, 잘못된 행만 건너뛰려면 --atomic 없이 실행하세요.",
+                )
+            imported = self.repo.add_many_atomic(valid_rows())  # 2차: 원자적 교체
+        else:
+            imported = self.repo.add_many(valid_rows())
+        first = self._make_id(start) if imported else None
+        last = self._make_id(start + imported - 1) if imported else None
+        return ImportResult(imported, len(errors), errors, first, last)
+
+    @timed  # 대량 처리: 소요 시간 로그
     def export_csv(self, path: Path, month: str | None, date_from: str | None, date_to: str | None) -> int:
+        """기간 조건에 맞는 거래를 CSV 로 내보내고 건수를 돌려준다."""
         if not (month or date_from or date_to):
             raise AppError("내보낼 기간 조건이 없습니다.", "--month YYYY-MM 또는 --from/--to YYYY-MM-DD 를 지정하세요.")
-        count = 0
-        with path.open("w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-            writer.writeheader()
-            for t in self._filter(date_from, date_to, None, None, None, None):
-                if month and not t.date.startswith(month):
-                    continue
-                writer.writerow({"date": t.date, "type": t.type, "category": t.category,
-                                 "amount": t.amount, "memo": t.memo, "tags": ",".join(t.tags)})
-                count += 1
-        return count
+        matches = (t for t in self._filter(date_from, date_to, None, None, None, None)
+                   if not month or t.date.startswith(month))
+        return CsvTransactionFile(path).write(matches)
