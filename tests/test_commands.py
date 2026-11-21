@@ -43,18 +43,18 @@ class CommandTestCase(unittest.TestCase):
         return out.strip().split("id=")[-1]
 
     def seed(self) -> None:
-        self.add("2024-01-15", "expense", "food", "15000", "점심", "meal")      # TX-000001
-        self.add("2024-01-14", "income", "salary", "3000000", "월급")           # TX-000002
-        self.add("2024-01-12", "expense", "transport", "20000", "버스")         # TX-000003
-        self.add("2024-01-01", "expense", "rent", "150000", "월세", "fixed")    # TX-000004
-        self.add("2024-02-03", "expense", "food", "8000", "커피", "cafe")       # TX-000005
+        self.add("2026-11-15", "expense", "food", "15000", "점심", "meal")      # TX-000001
+        self.add("2026-11-14", "income", "salary", "3000000", "월급")           # TX-000002
+        self.add("2026-11-12", "expense", "transport", "20000", "버스")         # TX-000003
+        self.add("2026-11-01", "expense", "rent", "150000", "월세", "fixed")    # TX-000004
+        self.add("2026-10-03", "expense", "food", "8000", "커피", "cafe")       # TX-000005 (지난달)
 
 
 class TestModel(unittest.TestCase):
     def test_transaction_is_immutable(self) -> None:
         import dataclasses
         from budget_app.models import Transaction
-        tx = Transaction("TX-000001", "2024-01-15", "expense", "food", 15000, "점심", ("meal",))
+        tx = Transaction("TX-000001", "2026-11-15", "expense", "food", 15000, "점심", ("meal",))
         with self.assertRaises(dataclasses.FrozenInstanceError):
             tx.amount = 1  # type: ignore[misc]
         changed = dataclasses.replace(tx, amount=20000)  # 수정 = 새 인스턴스
@@ -64,7 +64,7 @@ class TestModel(unittest.TestCase):
 
 class TestAdd(CommandTestCase):
     def test_add_saves_and_prints_id(self) -> None:
-        code, out = self.run_cli("add", inputs=["2024-01-15", "expense", "food", "15000", "점심", "meal"])
+        code, out = self.run_cli("add", inputs=["2026-11-15", "expense", "food", "15000", "점심", "meal"])
         self.assertEqual(code, 0)
         self.assertIn("[저장 완료] id=TX-000001", out)
         rec = json.loads((self.data / "transactions.jsonl").read_text(encoding="utf-8"))
@@ -73,7 +73,7 @@ class TestAdd(CommandTestCase):
 
     def test_add_reprompts_on_invalid_input(self) -> None:
         code, out = self.run_cli("add", inputs=[
-            "2024-13-40", "2024-01-15",   # 잘못된 날짜 → 재입력
+            "2026-13-40", "2026-11-15",   # 잘못된 날짜 → 재입력
             "exp", "expense",             # 잘못된 타입 → 재입력
             "nope", "food",               # 없는 카테고리 → 재입력
             "0", "15000",                 # 0 금액 → 재입력
@@ -93,15 +93,15 @@ class TestList(CommandTestCase):
         code, out = self.run_cli("list", "--limit", "3")
         self.assertEqual(code, 0)
         ids = [line.split(" | ")[0] for line in out.strip().splitlines()]
-        self.assertEqual(ids, ["TX-000005", "TX-000001", "TX-000002"])
+        self.assertEqual(ids, ["TX-000001", "TX-000002", "TX-000003"])  # 11-15, 11-14, 11-12 (TX-000005 는 10월)
 
 
 class TestSearch(CommandTestCase):
     def test_search_filters(self) -> None:
         self.seed()
         _, out = self.run_cli("search", "--type", "expense", "--category", "food")
-        self.assertEqual([l.split(" | ")[0] for l in out.strip().splitlines()], ["TX-000005", "TX-000001"])
-        _, out = self.run_cli("search", "--from", "2024-01-01", "--to", "2024-01-13")
+        self.assertEqual([l.split(" | ")[0] for l in out.strip().splitlines()], ["TX-000001", "TX-000005"])
+        _, out = self.run_cli("search", "--from", "2026-11-01", "--to", "2026-11-13")
         self.assertEqual([l.split(" | ")[0] for l in out.strip().splitlines()], ["TX-000003", "TX-000004"])
         _, out = self.run_cli("search", "--q", "월세")
         self.assertIn("TX-000004", out)
@@ -117,8 +117,8 @@ class TestSearch(CommandTestCase):
 class TestSummary(CommandTestCase):
     def test_summary_with_budget(self) -> None:
         self.seed()
-        self.assertEqual(self.run_cli("budget", "set", "--month", "2024-01", "--amount", "500000")[0], 0)
-        code, out = self.run_cli("summary", "--month", "2024-01", "--top", "2")
+        self.assertEqual(self.run_cli("budget", "set", "--month", "2026-11", "--amount", "500000")[0], 0)
+        code, out = self.run_cli("summary", "--month", "2026-11", "--top", "2")
         self.assertEqual(code, 0)
         self.assertIn("총 수입: 3000000원", out)
         self.assertIn("총 지출: 185000원", out)
@@ -130,29 +130,29 @@ class TestSummary(CommandTestCase):
 
     def test_summary_budget_exceeded(self) -> None:
         self.seed()
-        self.run_cli("budget", "set", "--month", "2024-01", "--amount", "100000")
-        _, out = self.run_cli("summary", "--month", "2024-01")
+        self.run_cli("budget", "set", "--month", "2026-11", "--amount", "100000")
+        _, out = self.run_cli("summary", "--month", "2026-11")
         self.assertIn("[경고] 예산을 85000원 초과했습니다!", out)
-        self.assertIn("[권장] 지출 1위 'rent' 부터 줄이거나, 예산 조정: budget set --month 2024-01", out)
+        self.assertIn("[권장] 지출 1위 'rent' 부터 줄이거나, 예산 조정: budget set --month 2026-11", out)
 
     def test_summary_budget_caution(self) -> None:
-        self.seed()  # 2024-01 지출 185000
-        self.run_cli("budget", "set", "--month", "2024-01", "--amount", "200000")  # 92.5%
-        _, out = self.run_cli("summary", "--month", "2024-01")
+        self.seed()  # 2026-11 지출 185000
+        self.run_cli("budget", "set", "--month", "2026-11", "--amount", "200000")  # 92.5%
+        _, out = self.run_cli("summary", "--month", "2026-11")
         self.assertIn("[주의] 예산의 92.5%를 사용했습니다. (남은 예산 15000원)", out)
         self.assertIn("[권장]", out)
         self.assertNotIn("[경고]", out)
 
     def test_summary_budget_ok_has_no_alert(self) -> None:
         self.seed()
-        self.run_cli("budget", "set", "--month", "2024-01", "--amount", "500000")  # 37%
-        _, out = self.run_cli("summary", "--month", "2024-01")
+        self.run_cli("budget", "set", "--month", "2026-11", "--amount", "500000")  # 37%
+        _, out = self.run_cli("summary", "--month", "2026-11")
         self.assertNotIn("[주의]", out)
         self.assertNotIn("[경고]", out)
         self.assertNotIn("[권장]", out)
 
     def test_summary_no_data(self) -> None:
-        code, out = self.run_cli("summary", "--month", "2030-01")
+        code, out = self.run_cli("summary", "--month", "2026-09")
         self.assertEqual(code, 0)
         self.assertIn("[데이터 없음]", out)
 
@@ -163,7 +163,7 @@ class TestUpdate(CommandTestCase):
         code, out = self.run_cli("update", "--id", "TX-000003", "--amount", "25000", "--memo", "택시")
         self.assertEqual(code, 0)
         self.assertIn("[수정 완료] id=TX-000003", out)
-        self.assertIn("TX-000003 | 2024-01-12 | expense | transport | 25000 | 택시", out)
+        self.assertIn("TX-000003 | 2026-11-12 | expense | transport | 25000 | 택시", out)
 
     def test_update_missing_id(self) -> None:
         code, out = self.run_cli("update", "--id", "TX-999999", "--amount", "1")
@@ -188,16 +188,16 @@ class TestImport(CommandTestCase):
         src = self.dir / "import.csv"
         src.write_text(
             "date,type,category,amount,memo,tags\n"
-            "2024-01-14,income,salary,3000000,월급,\n"
-            '2024-01-20,expense,food,30000,저녁,"meal,dinner"\n'
-            "2024-01-21,expense,nope,1000,,\n",
+            "2026-11-14,income,salary,3000000,월급,\n"
+            '2026-11-20,expense,food,30000,저녁,"meal,dinner"\n'
+            "2026-11-21,expense,nope,1000,,\n",
             encoding="utf-8",
         )
         code, out = self.run_cli("import", "--from", str(src))
         self.assertEqual(code, 0)
         self.assertIn("[완료] imported=2, skipped=1 (id TX-000001 ~ TX-000002)", out)
         self.assertIn("[안내] 부분 적용", out)
-        self.assertIn("TX-000002 | 2024-01-20 | expense | food | 30000 | 저녁 | meal,dinner",
+        self.assertIn("TX-000002 | 2026-11-20 | expense | food | 30000 | 저녁 | meal,dinner",
                       self.run_cli("list")[1])
 
 
@@ -215,7 +215,7 @@ class TestImportAtomic(CommandTestCase):
     def test_atomic_rejects_whole_file_if_any_row_invalid(self) -> None:
         self.seed()
         before = self.tx_text()
-        src = self.write_csv("2024-03-01,expense,food,100", "2024-03-02,expense,nope,100")
+        src = self.write_csv("2026-11-01,expense,food,100", "2026-11-02,expense,nope,100")
         code, out = self.run_cli("import", "--from", str(src), "--atomic")
         self.assertEqual(code, 1)
         self.assertIn("잘못된 행 1개가 있어 아무것도 가져오지 않았습니다", out)
@@ -224,7 +224,7 @@ class TestImportAtomic(CommandTestCase):
 
     def test_atomic_imports_all_when_valid(self) -> None:
         self.seed()
-        src = self.write_csv("2024-03-01,expense,food,100", "2024-03-02,expense,rent,200")
+        src = self.write_csv("2026-11-01,expense,food,100", "2026-11-02,expense,rent,200")
         code, out = self.run_cli("import", "--from", str(src), "--atomic")
         self.assertEqual(code, 0, out)
         self.assertIn("[완료] imported=2, skipped=0 (id TX-000006 ~ TX-000007)", out)
@@ -234,7 +234,7 @@ class TestImportAtomic(CommandTestCase):
         """쓰는 도중 중단(예: Ctrl+C)되면 원본 파일이 그대로 남는다."""
         self.seed()
         before = self.tx_text()
-        src = self.write_csv(*["2024-03-01,expense,food,100"] * 5)
+        src = self.write_csv(*["2026-11-01,expense,food,100"] * 5)
         original = Transaction.to_dict
         calls = {"n": 0}
 
@@ -253,7 +253,7 @@ class TestImportAtomic(CommandTestCase):
 
     def test_default_interrupted_write_keeps_rows_written_so_far(self) -> None:
         """기본(부분 적용) 모드는 롤백이 없다: 중단 전까지 쓴 행은 남는다 (문서화된 동작)."""
-        src = self.write_csv(*["2024-03-01,expense,food,100"] * 5)
+        src = self.write_csv(*["2026-11-01,expense,food,100"] * 5)
         original = Transaction.to_dict
         calls = {"n": 0}
 
@@ -273,7 +273,7 @@ class TestExport(CommandTestCase):
     def test_export_month(self) -> None:
         self.seed()
         dst = self.dir / "export.csv"
-        code, out = self.run_cli("export", "--out", str(dst), "--month", "2024-01")
+        code, out = self.run_cli("export", "--out", str(dst), "--month", "2026-11")
         self.assertEqual(code, 0)
         self.assertIn("(4 records)", out)
         lines = dst.read_text(encoding="utf-8").splitlines()
@@ -282,7 +282,7 @@ class TestExport(CommandTestCase):
 
     def test_export_zero_records_still_writes_header(self) -> None:
         dst = self.dir / "empty.csv"
-        code, out = self.run_cli("export", "--out", str(dst), "--month", "2030-01")
+        code, out = self.run_cli("export", "--out", str(dst), "--month", "2026-09")
         self.assertEqual(code, 0)
         self.assertIn("(0 records)", out)
         self.assertEqual(dst.read_text(encoding="utf-8").splitlines(), ["date,type,category,amount,memo,tags"])
@@ -295,7 +295,7 @@ class TestExport(CommandTestCase):
     def test_export_then_import_roundtrip(self) -> None:
         self.seed()
         dst = self.dir / "export.csv"
-        self.run_cli("export", "--out", str(dst), "--from", "2024-02-01", "--to", "2024-02-28")
+        self.run_cli("export", "--out", str(dst), "--from", "2026-10-01", "--to", "2026-10-31")
         _, out = self.run_cli("import", "--from", str(dst))
         self.assertIn("[완료] imported=1, skipped=0", out)
 
@@ -395,7 +395,7 @@ class TestLock(CommandTestCase):
     def test_write_waits_then_fails_while_locked(self) -> None:
         lock = self.lock_file(os.getpid())  # 살아 있는 프로세스가 잡고 있는 잠금
         with mock.patch("budget_app.storage.LOCK_TIMEOUT", 0.3):
-            code, out = self.run_cli("budget", "set", "--month", "2024-01", "--amount", "1000")
+            code, out = self.run_cli("budget", "set", "--month", "2026-11", "--amount", "1000")
         self.assertEqual(code, 1)
         self.assertIn("[오류] 다른 budget_app 실행이 데이터를 수정 중입니다", out)
         self.assertIn(str(lock), out)  # 힌트에 잠금 파일 경로 안내
@@ -405,21 +405,21 @@ class TestLock(CommandTestCase):
     def test_read_commands_do_not_need_lock(self) -> None:
         self.lock_file(os.getpid())
         self.assertEqual(self.run_cli("list")[0], 0)
-        self.assertEqual(self.run_cli("summary", "--month", "2024-01")[0], 0)
+        self.assertEqual(self.run_cli("summary", "--month", "2026-11")[0], 0)
 
     @unittest.skipUnless(os.name == "posix", "stale 잠금 자동 정리는 POSIX 전용")
     def test_stale_lock_from_dead_process_is_removed(self) -> None:
         dead = subprocess.Popen([sys.executable, "-c", "pass"])
         dead.wait()  # 종료된 프로세스의 PID
         lock = self.lock_file(dead.pid)
-        code, out = self.run_cli("budget", "set", "--month", "2024-01", "--amount", "1000")
+        code, out = self.run_cli("budget", "set", "--month", "2026-11", "--amount", "1000")
         self.assertEqual(code, 0, out)
         self.assertFalse(lock.exists())  # 명령이 끝나면 잠금 해제
 
     def test_concurrent_imports_get_unique_ids(self) -> None:
         """프로세스 5개가 동시에 20건씩 import → 100건, id 중복 없음."""
         src = self.dir / "in.csv"
-        src.write_text("date,type,category,amount\n" + "2024-01-01,expense,food,100\n" * 20, encoding="utf-8")
+        src.write_text("date,type,category,amount\n" + "2026-11-01,expense,food,100\n" * 20, encoding="utf-8")
         self.run_cli("list")
         env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent)}
         procs = [subprocess.Popen([sys.executable, "-m", "budget_app", "--data-dir", str(self.data),
